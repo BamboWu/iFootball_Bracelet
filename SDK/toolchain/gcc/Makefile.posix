@@ -1,0 +1,4 @@
+GNU_INSTALL_ROOT := /home/babypanda/nRF_IDE/gcc-arm-none-eabi-5_4-2016q3
+GNU_VERSION := 5.4.1
+GNU_PREFIX := arm-none-eabi
+

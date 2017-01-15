@@ -1,0 +1,9 @@
+#.gitignore
+**/*~
+**/*.swp
+**/_build/*
+!**/_build/*.hex
+!**/_build/*.bin
+!**/_build/*.out
+**/armgcc/.*
+
