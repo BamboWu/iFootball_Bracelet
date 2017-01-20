@@ -40,20 +40,34 @@ C_SOURCE_FILES += \
 $(abspath ../../../../SDK/toolchain/system_nrf51.c) \
 $(abspath ../../main.c) \
 $(abspath ../../../../SDK/drivers_nrf/delay/nrf_delay.c) \
+$(abspath ../../../../SDK/drivers_nrf/common/nrf_drv_common.c) \
+$(abspath ../../../../SDK/drivers_nrf/uart/nrf_drv_uart.c) \
+$(abspath ../../../../SDK/libraries/util/app_error.c) \
+$(abspath ../../../../SDK/libraries/util/app_util_platform.c) \
+$(abspath ../../../../SDK/libraries/util/nrf_assert.c) \
+$(abspath ../../../../SDK/libraries/fifo/app_fifo.c) \
+$(abspath ../../../../SDK/libraries/uart/retarget.c) \
+$(abspath ../../../../SDK/libraries/uart/app_uart_fifo.c) \
 
 #assembly files common to all targets
 ASM_SOURCE_FILES  = $(abspath ../../../../SDK/toolchain/gcc/gcc_startup_nrf51.s)
 
 #includes common to all targets
 #INC_PATHS  = -I$(abspath ../../../config/blinky_blank_pca10028)
-#INC_PATHS += -I$(abspath ../../../config)
+INC_PATHS += -I$(abspath ../../config/) #cover /SDK/driver_nrf/config
 INC_PATHS += -I$(abspath ../../../../SDK/toolchain/gcc)
 INC_PATHS += -I$(abspath ../../../../SDK/toolchain)
 INC_PATHS += -I$(abspath ../../../../SDK/softdevice/s110/headers)
 INC_PATHS += -I$(abspath ../../../bsp)
 INC_PATHS += -I$(abspath ../../../../SDK/device)
 INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/delay)
+INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/common)
+INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/config)
 INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/hal)
+INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/uart)
+INC_PATHS += -I$(abspath ../../../../SDK/libraries/util)
+INC_PATHS += -I$(abspath ../../../../SDK/libraries/fifo)
+INC_PATHS += -I$(abspath ../../../../SDK/libraries/uart)
 
 OBJECT_DIRECTORY = _build
 LISTING_DIRECTORY = $(OBJECT_DIRECTORY)

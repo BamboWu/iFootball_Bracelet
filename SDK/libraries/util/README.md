@@ -1,0 +1,1 @@
+This directory contains uitilities for the most common SDK usage and application design, such as **error codes**, **MACRO**, **inline operation**, and some other special operations that will be used frequently.
