@@ -28,6 +28,7 @@
 #include "nrf_gpio.h"
 #include "nrf.h"
 #include "boards.h"
+#include "SEGGER_RTT.h"
 
 const uint8_t leds_list[LEDS_NUMBER] = LEDS_LIST;
 
@@ -77,7 +78,8 @@ int main(void)
 
     APP_ERROR_CHECK(err_code);
 
-    printf("\n\rRunning!\n\r");
+    //SEGGER_RTT_Write(0,RTT_CTRL_BG_CYAN,8);
+    SEGGER_RTT_printf(0,"\n\rRunning!\n\r");
 
     // Toggle LEDs.
     while (true)
@@ -85,7 +87,8 @@ int main(void)
 	static int i = 0;
 	uint8_t cr;
 
-        while(app_uart_get(&cr) != NRF_SUCCESS);
+        //while(app_uart_get(&cr) != NRF_SUCCESS);
+	cr = SEGGER_RTT_WaitKey();
 	if(cr == ' ')
 	{
             LEDS_INVERT(1 << leds_list[i]);
@@ -102,7 +105,7 @@ int main(void)
 	    i = 0;
 	}
 	else
-	    printf("\n\rChar:%c\n\r",cr);
+	    SEGGER_RTT_printf(0,"\n\rChar:%c\n\r",cr);
 
 	if (i == LEDS_NUMBER) i = 0;
         

@@ -48,6 +48,8 @@ $(abspath ../../../../SDK/libraries/util/nrf_assert.c) \
 $(abspath ../../../../SDK/libraries/fifo/app_fifo.c) \
 $(abspath ../../../../SDK/libraries/uart/retarget.c) \
 $(abspath ../../../../SDK/libraries/uart/app_uart_fifo.c) \
+$(abspath ../../../../RTT/RTT/SEGGER_RTT.c) \
+$(abspath ../../../../RTT/RTT/SEGGER_RTT_printf.c) \
 
 #assembly files common to all targets
 ASM_SOURCE_FILES  = $(abspath ../../../../SDK/toolchain/gcc/gcc_startup_nrf51.s)
@@ -68,6 +70,7 @@ INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/uart)
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/util)
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/fifo)
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/uart)
+INC_PATHS += -I$(abspath ../../../../RTT/RTT/)
 
 OBJECT_DIRECTORY = _build
 LISTING_DIRECTORY = $(OBJECT_DIRECTORY)
