@@ -91,9 +91,14 @@ int main(void)
             LEDS_INVERT(1 << leds_list[i]);
 	    i++;
 	}
-	else if(cr == 'q' || cr == 'Q')
+	else if(cr == 'q')
 	{
 	    LEDS_OFF(LEDS_MASK);
+	    i = 0;
+	}
+	else if(cr == 'Q')
+        {
+            LEDS_ON(LEDS_MASK);
 	    i = 0;
 	}
 	else
