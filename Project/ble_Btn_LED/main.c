@@ -44,11 +44,12 @@
 #include "bsp.h"
 #include "bsp_btn_ble.h"
 #include "nrf_delay.h"
+#include "ble_lbs.h"
 #include "SEGGER_RTT.h"
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
-#define DEVICE_NAME                      "Nordic_Template"                               /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                      "iFootball_Bracelet"                               /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                "NordicSemiconductor"                      /**< Manufacturer. Will be passed to Device Information Service. */
 #define APP_ADV_INTERVAL                 300                                        /**< The advertising interval (in units of 0.625 ms. This value corresponds to 25 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS       180                                        /**< The advertising timeout in units of seconds. */
@@ -74,6 +75,15 @@
 
 #define DEAD_BEEF                        0xDEADBEEF                                 /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
+#define LEDBUTTON_LED_PIN_NO   BSP_LED_2_MASK
+//#define LEDBUTTON_BTN_PIN_NO   BUTTON_1
+//static void button_event_handler(uint8_t pin_no, uint8_t button_action);
+//static app_button_cfg_t buttons[] = 
+//{
+//	//{WAKEUP_BUTTON_PIN,     false,  NRF_GPIO_PIN_PULLUP,  NULL},
+//	{LEDBUTTON_BTN_PIN_NO,  false,  NRF_GPIO_PIN_PULLUP,  button_event_handler},	
+//};
+
 static dm_application_instance_t        m_app_handle;                               /**< Application identifier allocated by device manager */
 
 static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
@@ -82,6 +92,7 @@ static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID
 static ble_xx_service_t                     m_xxs;
 static ble_yy_service_t                     m_yys;
 */
+static ble_lbs_t                            m_lbs;
 
 // YOUR_JOB: Use UUIDs for service(s) used in your application.
 static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
@@ -113,6 +124,7 @@ static void timers_init(void)
 
     // Initialize timer module.
     APP_TIMER_INIT(APP_TIMER_PRESCALER, APP_TIMER_OP_QUEUE_SIZE, false);
+    ///Initialize app_timer module before bsp_init() for LED support
 
     // Create timers.
 
@@ -142,6 +154,7 @@ static void gap_params_init(void)
     err_code = sd_ble_gap_device_name_set(&sec_mode,
                                           (const uint8_t *)DEVICE_NAME,
                                           strlen(DEVICE_NAME));
+    ///SVCALL in ble_gap.h, to set GAP device name.
     APP_ERROR_CHECK(err_code);
 
     /* YOUR_JOB: Use an appearance value matching the application's use case.
@@ -156,6 +169,7 @@ static void gap_params_init(void)
     gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
 
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
+    ///SVCALL in ble_gap.h, to set GAP Peripheral Preferred Connection Parameters.
     APP_ERROR_CHECK(err_code);
 }
 
@@ -170,48 +184,67 @@ static void gap_params_init(void)
  * @param[in]   p_evt          Event received from the YY Service.
  *
  *
-static void on_yys_evt(ble_yy_service_t     * p_yy_service, 
-                       ble_yy_service_evt_t * p_evt)
+ */
+static void led_write_handler(ble_lbs_t     * p_lbs, 
+                       uint8_t led_state)
 {
-    switch (p_evt->evt_type)
-    {
-        case BLE_YY_NAME_EVT_WRITE:
-            APPL_LOG("[APPL]: charact written with value %s. \r\n", p_evt->params.char_xx.value.p_str);
-            break;
-        
-        default:
-            // No implementation needed.
-            break;
-    }
-}*/
+	if (led_state)
+	{
+		LEDS_ON(LEDBUTTON_LED_PIN_NO);
+	}
+	else
+	{
+		LEDS_OFF(LEDBUTTON_LED_PIN_NO);
+	}
+    
+}
+/*static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+{
+	uint32_t err_code;
 
+	switch(pin_no)
+	{
+		case LEDBUTTON_BTN_PIN_NO:
+			err_code = ble_lbs_on_button_change(&m_lbs, button_action);
+			if(err_code != NRF_SUCCESS &&
+			   err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+			   err_code != NRF_ERROR_INVALID_STATE)
+			{
+				APP_ERROR_CHECK(err_code);
+			}
+			break;
+		default:
+			APP_ERROR_HANDLER(pin_no);
+			break;
+	};
+};
+*/
 /**@brief Function for initializing services that will be used by the application.
  */
 static void services_init(void)
 {
-    /* YOUR_JOB: Add code to initialize the services used by the application.
+    ///* YOUR_JOB: Add code to initialize the services used by the application.
     uint32_t                           err_code;
-    ble_xxs_init_t                     xxs_init;
-    ble_yys_init_t                     yys_init;
+    //ble_xxs_init_t                     xxs_init;
+    //ble_yys_init_t                     yys_init;
+    ble_lbs_init_t                     lbs_init;
 
     // Initialize XXX Service.
-    memset(&xxs_init, 0, sizeof(xxs_init));
+    memset(&lbs_init, 0, sizeof(lbs_init));
 
-    xxs_init.evt_handler                = NULL;
-    xxs_init.is_xxx_notify_supported    = true;
-    xxs_init.ble_xx_initial_value.level = 100; 
+    lbs_init.led_write_handler          = led_write_handler;
     
-    err_code = ble_bas_init(&m_xxs, &xxs_init);
+    err_code = ble_lbs_init(&m_lbs, &lbs_init);
     APP_ERROR_CHECK(err_code);
 
     // Initialize YYY Service.
-    memset(&yys_init, 0, sizeof(yys_init));
-    yys_init.evt_handler                  = on_yys_evt;
-    yys_init.ble_yy_initial_value.counter = 0;
+    //memset(&yys_init, 0, sizeof(yys_init));
+    //yys_init.evt_handler                  = on_yys_evt;
+    //yys_init.ble_yy_initial_value.counter = 0;
 
-    err_code = ble_yy_service_init(&yys_init, &yy_init);
-    APP_ERROR_CHECK(err_code);
-    */
+    //err_code = ble_yy_service_init(&yys_init, &yy_init);
+    //APP_ERROR_CHECK(err_code);
+    //*/
 }
 
 
@@ -229,7 +262,7 @@ static void on_conn_params_evt(ble_conn_params_evt_t * p_evt)
 {
     uint32_t err_code;
 
-    if (p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
+    if(p_evt->evt_type == BLE_CONN_PARAMS_EVT_FAILED)
     {
         err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_CONN_INTERVAL_UNACCEPTABLE);
         APP_ERROR_CHECK(err_code);
@@ -340,10 +373,12 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	    err_code = app_button_enable();
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+	    err_code = app_button_disable();
             break;
 
         default:
@@ -363,14 +398,21 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
     dm_ble_evt_handler(p_ble_evt);
+    SEGGER_RTT_printf(0,"[dm_ble_evt_handler]");
     ble_conn_params_on_ble_evt(p_ble_evt);
+    SEGGER_RTT_printf(0,"[ble_conn_params_on_ble_evt]");
     bsp_btn_ble_on_ble_evt(p_ble_evt);
+    SEGGER_RTT_printf(0,"[bsp_btn_ble_on_ble_evt]");
     on_ble_evt(p_ble_evt);
+    SEGGER_RTT_printf(0,"[on_ble_evt]");
     ble_advertising_on_ble_evt(p_ble_evt);
+    SEGGER_RTT_printf(0,"[ble_advertising_on_ble_evt]");
     /*YOUR_JOB add calls to _on_ble_evt functions from each service your application is using
     ble_xxs_on_ble_evt(&m_xxs, p_ble_evt);
     ble_yys_on_ble_evt(&m_yys, p_ble_evt);
     */
+    ble_lbs_on_ble_evt(&m_lbs, p_ble_evt);
+    SEGGER_RTT_printf(0,"[ble_lbs_on_ble_evt]");
 }
 
 
@@ -398,6 +440,7 @@ static void ble_stack_init(void)
 
     // Initialize the SoftDevice handler module.
     SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_XTAL_20_PPM, NULL);
+    /// SDK wrapper macro from softdevice_handler.h
 
 #if defined(S110) || defined(S130) || defined(S132)
     // Enable BLE stack.
@@ -408,7 +451,8 @@ static void ble_stack_init(void)
 #endif
     ble_enable_params.gatts_enable_params.service_changed = IS_SRVC_CHANGED_CHARACT_PRESENT;
     err_code = sd_ble_enable(&ble_enable_params);
-    APP_ERROR_CHECK(err_code);
+    ///SVCALL in ble.h, Enable the BLE stack
+     APP_ERROR_CHECK(err_code);
 #endif
 
     // Register with the SoftDevice handler module for BLE events.
@@ -428,6 +472,7 @@ static void ble_stack_init(void)
 void bsp_event_handler(bsp_event_t event)
 {
     uint32_t err_code;
+    bool     button_action;
     switch (event)
     {
         case BSP_EVENT_SLEEP:
@@ -449,8 +494,35 @@ void bsp_event_handler(bsp_event_t event)
                 APP_ERROR_CHECK(err_code);
             }
             break;
+	case BSP_EVENT_KEY_0:
+	    SEGGER_RTT_printf(0,"\r\n[BSP_EVT]KEY0\r\n");
+	    //err_code = app_button_is_pushed(BUTTON_1,&button_action);
+	    //err_code = ble_lbs_on_button_change(&m_lbs, false);
+	    //if(err_code != NRF_SUCCESS &&
+	    //err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+	    //err_code != NRF_ERROR_INVALID_STATE)
+	    //{
+	    //   	APP_ERROR_CHECK(err_code);
+	    //}
+	    break;
+	case BSP_EVENT_KEY_1:
+	    SEGGER_RTT_printf(0,"\r\n[BSP_EVT]KEY1\r\n");
+	    err_code = app_button_is_pushed(BUTTON_1,&button_action);
+	    SEGGER_RTT_printf(0,"\r\n[app_button_is_pushed]%d\r\n",button_action);
+	    if(button_action == false)
+		    err_code = ble_lbs_on_button_change(&m_lbs, 0);
+	    else
+		    err_code = ble_lbs_on_button_change(&m_lbs, 1);
+	    if(err_code != NRF_SUCCESS &&
+	    err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+	    err_code != NRF_ERROR_INVALID_STATE)
+	    {
+	       	APP_ERROR_CHECK(err_code);
+	    }
+	    break;
 
         default:
+	    SEGGER_RTT_printf(0,"\r\n[BSP_EVT]default\r\n");
             break;
     }
 }
@@ -533,6 +605,7 @@ static void advertising_init(void)
     options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
 
     err_code = ble_advertising_init(&advdata, NULL, &options, on_adv_evt, NULL);
+    ///Function in ble_advertising.h for initializing the Advertising Module.
     APP_ERROR_CHECK(err_code);
 }
 
@@ -548,10 +621,14 @@ static void buttons_leds_init(bool * p_erase_bonds)
     uint32_t err_code = bsp_init(BSP_INIT_LED | BSP_INIT_BUTTONS,
                                  APP_TIMER_TICKS(100, APP_TIMER_PRESCALER), 
                                  bsp_event_handler);
+    ///Function defined in bsp.h for initializing BSP.
     APP_ERROR_CHECK(err_code);
 
     err_code = bsp_btn_ble_init(NULL, &startup_event);
+    ///Function defined in bsp_btn_ble.h to operate startup btn state and assign function for btn actions 
     APP_ERROR_CHECK(err_code);
+
+    //app_button_init(buttons, sizeof(buttons) / sizeof(buttons[0], BUTTON_DETECTION_DELAY);
 
     *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
 }
@@ -578,52 +655,52 @@ int main(void)
 
     // Initialize.
     timers_init();
-    SEGGER_RTT_printf(0,"\r\ntimers\r\n");
-    SEGGER_RTT_WaitKey();
     
     buttons_leds_init(&erase_bonds);
-    SEGGER_RTT_printf(0,"\r\nbtn_led\r\n");
-    SEGGER_RTT_WaitKey();
+    
+    SEGGER_RTT_printf(0,"\r\n[Init]BSP OK\r\n");
+    //SEGGER_RTT_WaitKey();
     
     ble_stack_init();
-    SEGGER_RTT_printf(0,"\r\nble_stack\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[ble_stack_init()]defined above,to enable SD\r\n");
+    //SEGGER_RTT_WaitKey();
     
     device_manager_init(erase_bonds);
-    SEGGER_RTT_printf(0,"\r\ndm\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[device_manager_init()]\r\n");
+    //SEGGER_RTT_WaitKey();
+    ///Device manager module uses pstorage to do DFU
     
     gap_params_init();
-    SEGGER_RTT_printf(0,"\r\ngap_params\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[gap_params_init()]set device name and ppcp\r\n");
+    //SEGGER_RTT_WaitKey();
     
     advertising_init();
-    SEGGER_RTT_printf(0,"\r\nadv\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[advertising_init()]set advertising options\r\n");
+    //SEGGER_RTT_WaitKey();
     
     services_init();
-    SEGGER_RTT_printf(0,"\r\nsrvs\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[services_init()]BLS(Btn_LED Service\r\n");
+    //SEGGER_RTT_WaitKey();
     
     conn_params_init();
-    SEGGER_RTT_printf(0,"\r\nconn_parm\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[conn_params_init()]set connection parameters\r\n");
+    //SEGGER_RTT_WaitKey();
 
     SEGGER_RTT_printf(0,"\r\n[Init]OK\r\n");
-    SEGGER_RTT_WaitKey();
-
+    //SEGGER_RTT_WaitKey();
+   
     // Start execution.
     application_timers_start();
     err_code = ble_advertising_start(BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
-    SEGGER_RTT_printf(0,"\r\n[Exec]OK\r\n");
-    SEGGER_RTT_WaitKey();
+    SEGGER_RTT_printf(0,"\r\n[Exec]OK, start app_timer and advertising\r\n");
+    //SEGGER_RTT_WaitKey();
 
     // Enter main loop.
-    for (;;)
+    for (err_code=0;;err_code++)
     {
-        SEGGER_RTT_printf(0,"\r\n[Loop]\r\n");
+        SEGGER_RTT_printf(0,"\r\n[Loop]%d\r\n",err_code);
         power_manage();
     }
 }

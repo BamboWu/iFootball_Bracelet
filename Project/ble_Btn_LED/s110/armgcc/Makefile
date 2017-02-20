@@ -58,6 +58,7 @@ $(abspath ../../../../SDK/ble/common/ble_srv_common.c) \
 $(abspath ../../../../SDK/ble/device_manager/device_manager_peripheral.c) \
 $(abspath ../../../../SDK/ble/ble_advertising/ble_advertising.c) \
 $(abspath ../../../../SDK/softdevice/common/softdevice_handler/softdevice_handler.c) \
+$(abspath ../../../../SDK/ble/ble_services/ble_lbs/ble_lbs.c) \
 $(abspath ../../../../RTT/RTT/SEGGER_RTT.c) \
 $(abspath ../../../../RTT/RTT/SEGGER_RTT_printf.c) \
 #$(abspath ../../../../SDK/libraries/trace/app_trace.c) \
@@ -89,6 +90,7 @@ INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_advertising)
 INC_PATHS += -I$(abspath ../../../../SDK/ble/device_manager)
 INC_PATHS += -I$(abspath ../../../../SDK/softdevice/s110/headers)
 INC_PATHS += -I$(abspath ../../../../SDK/softdevice/common/softdevice_handler)
+INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_services/ble_lbs)
 INC_PATHS += -I$(abspath ../../../../RTT/RTT/)
 
 OBJECT_DIRECTORY = _build
@@ -162,6 +164,7 @@ nrf51822_xxaa_s110: OUTPUT_FILENAME := nrf51822_xxaa_s110
 nrf51822_xxaa_s110: LINKER_SCRIPT=ble_Btn_LED.ld
 nrf51822_xxaa_s110: $(BUILD_DIRECTORIES) $(OBJECTS)
 	@echo Linking target: $(OUTPUT_FILENAME).out
+	@echo Libraries: $(LIBS)
 	$(NO_ECHO)$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e finalize
 
