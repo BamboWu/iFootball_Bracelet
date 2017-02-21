@@ -27,7 +27,7 @@
 #define BSP_LED_2_MASK    (1<<LED_2)
 
 #define LEDS_MASK      (BSP_LED_0_MASK | BSP_LED_1_MASK | BSP_LED_2_MASK)
-#define LEDS_INV_MASK  LEDS_MASK
+#define LEDS_INV_MASK  ~LEDS_MASK
 
 #define BUTTON_START   16
 #define BUTTON_0       16

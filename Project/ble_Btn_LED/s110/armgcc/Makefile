@@ -1,8 +1,10 @@
 PROJECT_NAME := ble_Btn_LED_s110_nRF51822
 
+###
+### Makefile and template
+###
 export OUTPUT_FILENAME
-#MAKEFILE_NAME := $(CURDIR)/$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
-MAKEFILE_NAME := $(MAKEFILE_LIST)
+MAKEFILE_NAME := $(MAKEFILE_LIST) #By default, $(MAKEFILE_LIST)=Makefile
 MAKEFILE_DIR := $(dir $(MAKEFILE_NAME) ) 
 
 TEMPLATE_PATH = ../../../../SDK/toolchain/gcc
@@ -12,6 +14,9 @@ else
 include $(TEMPLATE_PATH)/Makefile.posix
 endif
 
+###
+### tools
+###
 MK := mkdir
 RM := rm -rf
 
@@ -19,7 +24,7 @@ RM := rm -rf
 ifeq ("$(VERBOSE)","1")
 NO_ECHO := 
 else
-NO_ECHO := @
+NO_ECHO := @  #'@' following the Tab makes the command excuted without print out
 endif
 
 # Toolchain commands
@@ -33,75 +38,105 @@ OBJCOPY         := '$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-objcopy'
 SIZE            := '$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-size'
 
 #function for removing duplicates in a list
-remduplicates = $(strip $(if $1,$(firstword $1) $(call remduplicates,$(filter-out $(firstword $1),$1))))
+remduplicates = $(strip $(if $1,$(firstword $1) $(call remduplicates,$(filter-out $(firstword $1),$1)))) 
+#$(strip string) is used to adjust format of string so that each two words in the string are sperated by only on blackspace. 
+#First one plus the rest where the first one is filtered out, expended recursively until empty string is passed as argument $1
 
-#source common to all targets
-C_SOURCE_FILES += \
-$(abspath ../../main.c) \
-$(abspath ../../../bsp/bsp.c) \
-$(abspath ../../../bsp/bsp_btn_ble.c) \
-$(abspath ../../../../SDK/toolchain/system_nrf51.c) \
-$(abspath ../../../../SDK/drivers_nrf/delay/nrf_delay.c) \
-$(abspath ../../../../SDK/drivers_nrf/common/nrf_drv_common.c) \
-$(abspath ../../../../SDK/drivers_nrf/uart/nrf_drv_uart.c) \
-$(abspath ../../../../SDK/drivers_nrf/gpiote/nrf_drv_gpiote.c) \
-$(abspath ../../../../SDK/drivers_nrf/pstorage/pstorage.c) \
-$(abspath ../../../../SDK/libraries/util/app_error.c) \
-$(abspath ../../../../SDK/libraries/util/nrf_assert.c) \
-$(abspath ../../../../SDK/libraries/uart/app_uart.c) \
-$(abspath ../../../../SDK/libraries/uart/retarget.c) \
-$(abspath ../../../../SDK/libraries/button/app_button.c) \
-$(abspath ../../../../SDK/libraries/timer/app_timer.c) \
-$(abspath ../../../../SDK/ble/common/ble_advdata.c) \
-$(abspath ../../../../SDK/ble/common/ble_conn_params.c) \
-$(abspath ../../../../SDK/ble/common/ble_srv_common.c) \
-$(abspath ../../../../SDK/ble/device_manager/device_manager_peripheral.c) \
-$(abspath ../../../../SDK/ble/ble_advertising/ble_advertising.c) \
-$(abspath ../../../../SDK/softdevice/common/softdevice_handler/softdevice_handler.c) \
-$(abspath ../../../../SDK/ble/ble_services/ble_lbs/ble_lbs.c) \
-$(abspath ../../../../RTT/RTT/SEGGER_RTT.c) \
-$(abspath ../../../../RTT/RTT/SEGGER_RTT_printf.c) \
-#$(abspath ../../../../SDK/libraries/trace/app_trace.c) \
-#
-
-#assembly files common to all targets
+###
+### source files and including path
+###
+#assembly files (startup code) common to all targets
 ASM_SOURCE_FILES  = $(abspath ../../../../SDK/toolchain/gcc/gcc_startup_nrf51.s)
 
+#source common to all targets
+C_SOURCE_FILES =  $(abspath ../../main.c) 
+C_SOURCE_FILES += $(abspath ../../../../SDK/toolchain/system_nrf51.c) 
+C_SOURCE_FILES += $(abspath ../../../../SDK/drivers_nrf/delay/nrf_delay.c) 
+#source to use resources (LED&Btn) on a specific board
+C_SOURCE_FILES += $(abspath ../../../bsp/bsp.c)
+C_SOURCE_FILES += $(abspath ../../../bsp/bsp_btn_ble.c)
+#peripheral drivers offered in SDK and their IRQ handlers
+C_SOURCE_FILES += $(abspath ../../../../SDK/drivers_nrf/common/nrf_drv_common.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/drivers_nrf/gpiote/nrf_drv_gpiote.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/drivers_nrf/pstorage/pstorage.c)
+#simple application modules and their error handlers
+C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/util/app_error.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/timer/app_timer.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/button/app_button.c)#use nrf_drv_gpiote operating button actions as interrupt, and use app_timer for delay detection
+#source for setting handlers of softdevice, access to ble events
+C_SOURCE_FILES += $(abspath ../../../../SDK/softdevice/common/softdevice_handler/softdevice_handler.c)
+#BLE basic functionality for data encoding, connection parameters setting, and characteristic, descriptor adding to services 
+C_SOURCE_FILES += $(abspath ../../../../SDK/ble/common/ble_advdata.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/ble/common/ble_conn_params.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/ble/common/ble_srv_common.c)
+#module to manage advertising with four modes and whitelist
+C_SOURCE_FILES += $(abspath ../../../../SDK/ble/ble_advertising/ble_advertising.c)
+#source for custom service
+C_SOURCE_FILES += $(abspath ../../../../SDK/ble/ble_services/ble_lbs/ble_lbs.c)
+#source for using uart
+#C_SOURCE_FILES += $(abspath ../../../../SDK/drivers_nrf/uart/nrf_drv_uart.c)
+#C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/uart/app_uart.c)
+#C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/uart/retarget.c) 
+#app_trace -- a module outputing log through uart
+C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/trace/app_trace.c)
+#module to manage device information and services context
+#C_SOURCE_FILES += $(abspath ../../../../SDK/ble/device_manager/device_manager_peripheral.c)
+#sources to support JLink tool -- RTT (Real-Time Terminal)
+C_SOURCE_FILES += $(abspath ../../../../RTT/RTT/SEGGER_RTT.c)
+C_SOURCE_FILES += $(abspath ../../../../RTT/RTT/SEGGER_RTT_printf.c)
+
+
 #includes common to all targets
-INC_PATHS  = -I$(abspath ../../config)
-INC_PATHS += -I$(abspath ../../../bsp)
-INC_PATHS += -I$(abspath ../../../../SDK/device)
+INC_PATHS  = -I$(abspath ../../../../SDK/device)
 INC_PATHS += -I$(abspath ../../../../SDK/toolchain)
 INC_PATHS += -I$(abspath ../../../../SDK/toolchain/gcc)
-INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/hal)
 INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/delay)
-INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/gpiote)
-INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/uart)
+INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/hal)
+#includes to use resources (LED&Btn) on specific board
+INC_PATHS += -I$(abspath ../../../bsp)
+INC_PATHS += -I$(abspath ../../config)
+#includes for peripheral drivers offered by SDK
 INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/config)
 INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/common)
+INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/gpiote)
+#INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/uart)
 INC_PATHS += -I$(abspath ../../../../SDK/drivers_nrf/pstorage)
+#includes for simple applications and their error handler
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/util)
-INC_PATHS += -I$(abspath ../../../../SDK/libraries/uart)
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/timer)
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/button)
+#INC_PATHS += -I$(abspath ../../../../SDK/libraries/uart)
 INC_PATHS += -I$(abspath ../../../../SDK/libraries/trace)
-INC_PATHS += -I$(abspath ../../../../SDK/ble/common)
-INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_advertising)
-INC_PATHS += -I$(abspath ../../../../SDK/ble/device_manager)
+#headers for softdevice
 INC_PATHS += -I$(abspath ../../../../SDK/softdevice/s110/headers)
 INC_PATHS += -I$(abspath ../../../../SDK/softdevice/common/softdevice_handler)
+#headers for basic ble functionalities
+INC_PATHS += -I$(abspath ../../../../SDK/ble/common)
+#headers for advertising managing
+INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_advertising)
+#headers for device information managing
+#INC_PATHS += -I$(abspath ../../../../SDK/ble/device_manager)
+#headers for ble services
 INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_services/ble_lbs)
+#headers for JLink tool -- RTT (Real-Time Terminal)
 INC_PATHS += -I$(abspath ../../../../RTT/RTT/)
 
+###
+### output settings
+###
 OBJECT_DIRECTORY = _build
 LISTING_DIRECTORY = $(OBJECT_DIRECTORY)
 OUTPUT_BINARY_DIRECTORY = $(OBJECT_DIRECTORY)
 
 # Sorting removes duplicates
-BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY) )
+BUILD_DIRECTORIES := $(sort $(OBJECT_DIRECTORY) $(OUTPUT_BINARY_DIRECTORY) $(LISTING_DIRECTORY) ) #BUILD_DIRECTORIES are/is the summary of directories used for ouput ordered alphabetically
 
+
+###
+### compiler and linker parameters
+###
 #flags common to all targets
-CFLAGS  = -DNRF51
+CFLAGS  = -DNRF51                ### parameter -DXXX for gcc means predefine XXX
 CFLAGS += -DBOARD_QYNRF51822
 CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DS110
@@ -132,6 +167,10 @@ ASMFLAGS += -DSOFTDEVICE_PRESENT
 ASMFLAGS += -DS110
 ASMFLAGS += -DBLE_STACK_SUPPORT_REQD
 ASMFLAGS += -DSWI_DISABLE0
+
+###
+### targets
+###
 #default target - first one defined
 default: clean nrf51822_xxaa_s110
 
@@ -139,13 +178,13 @@ default: clean nrf51822_xxaa_s110
 all: clean
 	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e cleanobj
 	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e nrf51822_xxaa_s110
+	# @make -f Makefile -C /home/babypanda/nRF_IDE/Project/ble_Btn_LED/s110/armgcc/ -e cleanobj        # -f specify script file, -C change work directory, -e = --environment-overrides Give variables taken from the environment precedence over variables from makefiles. 
 
 #target for printing all targets
 help:
 	@echo following targets are available:
 	@echo 	nrf51822_xxaa_s110
 	@echo 	flash_softdevice
-
 
 C_SOURCE_FILE_NAMES = $(notdir $(C_SOURCE_FILES))
 C_PATHS = $(call remduplicates, $(dir $(C_SOURCE_FILES) ) )
@@ -164,7 +203,6 @@ nrf51822_xxaa_s110: OUTPUT_FILENAME := nrf51822_xxaa_s110
 nrf51822_xxaa_s110: LINKER_SCRIPT=ble_Btn_LED.ld
 nrf51822_xxaa_s110: $(BUILD_DIRECTORIES) $(OBJECTS)
 	@echo Linking target: $(OUTPUT_FILENAME).out
-	@echo Libraries: $(LIBS)
 	$(NO_ECHO)$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).out
 	$(NO_ECHO)$(MAKE) -f $(MAKEFILE_NAME) -C $(MAKEFILE_DIR) -e finalize
 

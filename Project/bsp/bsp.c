@@ -17,6 +17,7 @@
 #include "nrf.h"
 #include "nrf_gpio.h"
 #include "nrf_error.h"
+//#include "SEGGER_RTT.h"
 
 #ifndef BSP_SIMPLE
 #include "app_timer.h"
@@ -229,12 +230,14 @@ static uint32_t bsp_led_indication(bsp_indication_t indicate)
     {
         case BSP_INDICATE_IDLE:
             LEDS_OFF(LEDS_MASK & ~m_alert_mask);
+	    //SEGGER_RTT_printf(0,"\r\n[bsp_led_indication]IDLE:%x\r\n",LEDS_MASK & ~m_alert_mask);
             m_stable_state = indicate;
             break;
 
         case BSP_INDICATE_SCANNING:
         case BSP_INDICATE_ADVERTISING:
             LEDS_OFF(LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
+	    //SEGGER_RTT_printf(0,"\r\n[bsp_led_indication]ADV:%x\r\n",LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
 
             // in advertising blink LED_0
             if (LED_IS_ON(BSP_LED_0_MASK))
@@ -258,6 +261,7 @@ static uint32_t bsp_led_indication(bsp_indication_t indicate)
 
         case BSP_INDICATE_ADVERTISING_WHITELIST:
             LEDS_OFF(LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
+	    //SEGGER_RTT_printf(0,"\r\n[bsp_led_indication]WHITELIST:%x\r\n",LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
 
             // in advertising quickly blink LED_0
             if (LED_IS_ON(BSP_LED_0_MASK))
@@ -282,6 +286,7 @@ static uint32_t bsp_led_indication(bsp_indication_t indicate)
 
         case BSP_INDICATE_ADVERTISING_SLOW:
             LEDS_OFF(LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
+	    //SEGGER_RTT_printf(0,"\r\n[bsp_led_indication]SLOW:%x\r\n",LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
 
             // in advertising slowly blink LED_0
             if (LED_IS_ON(BSP_LED_0_MASK))
@@ -304,6 +309,7 @@ static uint32_t bsp_led_indication(bsp_indication_t indicate)
 
         case BSP_INDICATE_ADVERTISING_DIRECTED:
             LEDS_OFF(LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
+	    //SEGGER_RTT_printf(0,"\r\n[bsp_led_indication]DIRECTED:%x\r\n",LEDS_MASK & ~BSP_LED_0_MASK & ~m_alert_mask);
 
             // in advertising very quickly blink LED_0
             if (LED_IS_ON(BSP_LED_0_MASK))
