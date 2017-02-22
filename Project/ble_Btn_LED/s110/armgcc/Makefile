@@ -72,7 +72,8 @@ C_SOURCE_FILES += $(abspath ../../../../SDK/ble/common/ble_srv_common.c)
 #module to manage advertising with four modes and whitelist
 C_SOURCE_FILES += $(abspath ../../../../SDK/ble/ble_advertising/ble_advertising.c)
 #source for custom service
-C_SOURCE_FILES += $(abspath ../../../../SDK/ble/ble_services/ble_lbs/ble_lbs.c)
+#C_SOURCE_FILES += $(abspath ../../../../SDK/ble/ble_services/ble_lbs/ble_lbs.c)
+C_SOURCE_FILES += $(abspath ../../../../SDK/ble/ble_services/ble_BLS/ble_BLS.c)
 #source for using uart
 #C_SOURCE_FILES += $(abspath ../../../../SDK/drivers_nrf/uart/nrf_drv_uart.c)
 #C_SOURCE_FILES += $(abspath ../../../../SDK/libraries/uart/app_uart.c)
@@ -117,7 +118,8 @@ INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_advertising)
 #headers for device information managing
 #INC_PATHS += -I$(abspath ../../../../SDK/ble/device_manager)
 #headers for ble services
-INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_services/ble_lbs)
+#INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_services/ble_lbs)
+INC_PATHS += -I$(abspath ../../../../SDK/ble/ble_services/ble_BLS)
 #headers for JLink tool -- RTT (Real-Time Terminal)
 INC_PATHS += -I$(abspath ../../../../RTT/RTT/)
 

@@ -39,10 +39,11 @@
 #include "softdevice_handler.h"
 #include "app_timer.h"
 //#include "device_manager.h"
-//#include "pstorage.h"
-//#include "app_trace.h"
+#include "pstorage.h"
+#include "app_trace.h"
 #include "bsp.h"
 #include "bsp_btn_ble.h"
+#include "ble_BLS.h"
 #include "SEGGER_RTT.h"
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
@@ -73,6 +74,11 @@
 
 #define DEAD_BEEF                        0xDEADBEEF                                 /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
+#define BLS_LED_PIN_NO                   LED_2
+#define BLS_BTN_NO                       1
+
+#define BUTTON_DETECTION_DELAY           MSEC_TO_UNITS(100, UNIT_1_25_MS)
+
 //static dm_application_instance_t        m_app_handle;                               /**< Application identifier allocated by device manager */
 
 static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
@@ -81,10 +87,17 @@ static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID
 static ble_xx_service_t                     m_xxs;
 static ble_yy_service_t                     m_yys;
 */
+static ble_BLS_t                            m_BLS;
 
 // YOUR_JOB: Use UUIDs for service(s) used in your application.
 static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
 
+//static void button_event_handler(uint8_t pin_no, uint8_t button_action);
+
+//static app_button_cfg_t buttons[] = 
+//{
+//    {BLS_BTN_PIN_NO, false, NRF_GPIO_PIN_PULLUP, button_event_handler},
+//};
                                    
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -162,6 +175,8 @@ static void sleep_mode_enter(void)
 void bsp_event_handler(bsp_event_t event)
 {
     uint32_t err_code;
+    bool     btn_state;
+
     switch (event)
     {
         case BSP_EVENT_SLEEP:
@@ -176,7 +191,6 @@ void bsp_event_handler(bsp_event_t event)
             }
             break;
 
-	    /*
         case BSP_EVENT_WHITELIST_OFF:
             err_code = ble_advertising_restart_without_whitelist();
             if (err_code != NRF_ERROR_INVALID_STATE)
@@ -184,12 +198,55 @@ void bsp_event_handler(bsp_event_t event)
                 APP_ERROR_CHECK(err_code);
             }
             break;
-	    */
+
+        case BSP_EVENT_KEY_1:
+	    err_code = bsp_button_is_pressed(BLS_BTN_NO,&btn_state);
+	    if (err_code != NRF_SUCCESS)
+            {
+	        SEGGER_RTT_printf(0,"\r\n[bsp_button_is_pressed]error:%x\r\n");
+                APP_ERROR_CHECK(err_code);
+		break;
+            }
+            //SEGGER_RTT_printf(0,"\r\n[BSP_EVENT_KEY_1]state:%x\r\n",btn_state);
+	    if(btn_state)
+                err_code = ble_BLS_on_button_action(&m_BLS, 1);
+	    else
+                err_code = ble_BLS_on_button_action(&m_BLS, 0);
+	    if (err_code != NRF_SUCCESS &&
+	        err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+	        err_code != NRF_ERROR_INVALID_STATE)
+	    {
+	        SEGGER_RTT_printf(0,"\r\n[ble_BLS_on_button_action]error:%x\r\n");
+	        APP_ERROR_CHECK(err_code);
+	    }
+            break;
 
         default:
             break;
     }
 }
+
+//static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+//{
+//    uint32_t err_code;
+//
+//    switch(pin_no)
+//    {
+//	 case BLS_BTN_PIN_NO:
+//             err_code = ble_BLS_on_button_action(&m_BLS, button_action);
+//	     if (err_code != NRF_SUCCESS &&
+//	         err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
+//		 err_code != NRF_ERROR_INVALID_STATE)
+//	     {
+//		 SEGGER_RTT_printf(0,"\r\n[ble_BLS_on_button_action]error:%x\r\n");
+//		 APP_ERROR_CHECK(err_code);
+//	     }
+//	     break;
+//	 default:
+//	     APP_ERROR_HANDLER(pin_no);
+//	     break;
+//    }
+//}
 
 /**@brief Function for initializing buttons and leds.
  *
@@ -208,6 +265,11 @@ static void buttons_leds_init(bool * p_erase_bonds)
     APP_ERROR_CHECK(err_code);
 
     *p_erase_bonds = (startup_event == BSP_EVENT_CLEAR_BONDING_DATA);
+
+    //err_code = app_button_init(buttons, sizeof(buttons) / sizeof(buttons[0]), BUTTON_DETECTION_DELAY);
+    //if(err_code != NRF_SUCCESS)
+	//SEGGER_RTT_printf(0,"\r\n[app_button_init]error:%x\r\n",err_code);
+	//app_button_init() has been used in bsp_init() to assemble all of handlers.
 }
 
 
@@ -301,58 +363,47 @@ static void conn_params_init(void)
         SEGGER_RTT_printf(0,"\r\n[conn_params_init]error:%x\r\n",err_code);
 }
 
-/**@brief Function for handling the YYY Service events. 
+/**@brief Function for handling the Button LED Service events. 
  * YOUR_JOB implement a service handler function depending on the event the service you are using can generate
  *
- * @details This function will be called for all YY Service events which are passed to
+ * @details This function will be called for Button LED Service LED write event which are passed to
  *          the application.
  *
- * @param[in]   p_yy_service   YY Service structure.
- * @param[in]   p_evt          Event received from the YY Service.
+ * @param[in]   p_BLS_service  Button LED Service handle.
+ * @param[in]   p_evt          Event received from the  Service.
  *
  *
-static void on_yys_evt(ble_yy_service_t     * p_yy_service, 
-                       ble_yy_service_evt_t * p_evt)
+ */
+static void LED_write_handler(ble_BLS_t  * p_BLS, 
+                                               uint8_t  new_state)
 {
-    switch (p_evt->evt_type)
+    if (new_state)
     {
-        case BLE_YY_NAME_EVT_WRITE:
-            APPL_LOG("[APPL]: charact written with value %s. \r\n", p_evt->params.char_xx.value.p_str);
-            break;
-        
-        default:
-            // No implementation needed.
-            break;
+	    nrf_gpio_pin_set(BLS_LED_PIN_NO);
     }
-}*/
+    else
+    {
+	    nrf_gpio_pin_clear(BLS_LED_PIN_NO);
+    }
+    return;
+}
 
 /**@brief Function for initializing services that will be used by the application.
  */
 static void services_init(void)
 {
-    /* YOUR_JOB: Add code to initialize the services used by the application.
+    ///* YOUR_JOB: Add code to initialize the services used by the application.
     uint32_t                           err_code;
-    ble_xxs_init_t                     xxs_init;
-    ble_yys_init_t                     yys_init;
+    ble_BLS_init_t                     BLS_init;
 
-    // Initialize XXX Service.
-    memset(&xxs_init, 0, sizeof(xxs_init));
+    // Initialize BLS Service.
+    memset(&BLS_init, 0, sizeof(BLS_init));
 
-    xxs_init.evt_handler                = NULL;
-    xxs_init.is_xxx_notify_supported    = true;
-    xxs_init.ble_xx_initial_value.level = 100; 
+    BLS_init.evt_handler                = LED_write_handler;
+    BLS_init.initial_LED_state          = 0; 
     
-    err_code = ble_bas_init(&m_xxs, &xxs_init);
+    err_code = ble_BLS_init(&m_BLS, &BLS_init);
     APP_ERROR_CHECK(err_code);
-
-    // Initialize YYY Service.
-    memset(&yys_init, 0, sizeof(yys_init));
-    yys_init.evt_handler                  = on_yys_evt;
-    yys_init.ble_yy_initial_value.counter = 0;
-
-    err_code = ble_yy_service_init(&yys_init, &yy_init);
-    APP_ERROR_CHECK(err_code);
-    */
 }
 
 
@@ -392,17 +443,19 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
     switch (p_ble_evt->header.evt_id)
             {
         case BLE_GAP_EVT_CONNECTED:
-	    SEGGER_RTT_printf(0,"\r\n[on_ble_evt]BLE_GAP_EVT_CONNECTED\r\n");
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
+	    err_code = app_button_enable();
+	    SEGGER_RTT_printf(0,"\r\n[on_ble_evt]BLE_GAP_EVT_CONNECTED, app_button_enable()error:%x\r\n",err_code);
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-	    SEGGER_RTT_printf(0,"\r\n[on_ble_evt]BLE_GAP_EVT_DISCONNECTED\r\n");
             err_code = bsp_indication_set(BSP_INDICATE_IDLE);
             APP_ERROR_CHECK(err_code);
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+	    err_code = app_button_disable();
+	    SEGGER_RTT_printf(0,"\r\n[on_ble_evt]BLE_GAP_EVT_DICONNECTED, app_button_disable()error:%x\r\n",err_code);
             break;
 
         default:
@@ -430,6 +483,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     ble_xxs_on_ble_evt(&m_xxs, p_ble_evt);
     ble_yys_on_ble_evt(&m_yys, p_ble_evt);
     */
+    ble_BLS_on_ble_evt(&m_BLS, p_ble_evt);
 }
 
 
@@ -543,13 +597,15 @@ static void advertising_init(void)
 {
     uint32_t      err_code;
     ble_advdata_t advdata;
+    ble_advdata_t scanrsp;
+    ble_uuid_t    adv_uuids[] = {{BLS_UUID_SERVICE, m_BLS.uuid_type}};
 
     // Build advertising data struct to pass into @ref ble_advertising_init.
     memset(&advdata, 0, sizeof(advdata));
 
     advdata.name_type               = BLE_ADVDATA_FULL_NAME;
     advdata.include_appearance      = true;
-    advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+    advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
     advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     advdata.uuids_complete.p_uuids  = m_adv_uuids;
 
@@ -558,7 +614,11 @@ static void advertising_init(void)
     options.ble_adv_fast_interval = APP_ADV_INTERVAL;
     options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
 
-    err_code = ble_advertising_init(&advdata, NULL, &options, on_adv_evt, NULL);
+    memset(&scanrsp, 0, sizeof(scanrsp));
+    scanrsp.uuids_complete.uuid_cnt = sizeof(adv_uuids) / sizeof(adv_uuids[0]);
+    scanrsp.uuids_complete.p_uuids  = adv_uuids;
+    
+    err_code = ble_advertising_init(&advdata, &scanrsp, &options, on_adv_evt, NULL);
     //err_code = ble_advdata_set(&advdata, NULL);
     APP_ERROR_CHECK(err_code);
     if(err_code != NRF_SUCCESS)
@@ -593,8 +653,8 @@ int main(void)
     ble_stack_init();
     //device_manager_init(erase_bonds);
     gap_params_init();
+    services_init();
     advertising_init();
-    //services_init();
     conn_params_init();
 
     SEGGER_RTT_printf(0,"\r\n[init]OK\r\n");
