@@ -87,6 +87,7 @@ typedef struct app_calendar_s {
 	uint8_t  date;
 	hour_t   hour;
 	uint8_t  minute;
+	uint8_t  second;
 } app_calendar_t;
 
 

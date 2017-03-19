@@ -641,6 +641,8 @@ static void power_manage(void)
 int main(void)
 {
     uint32_t err_code;
+    uint8_t  key;
+    app_calendar_t calendar;
     //bool erase_bonds;
 
     SEGGER_RTT_printf(0,"\r\n[main]press any key to continue\r\n");
@@ -668,6 +670,89 @@ int main(void)
     for (err_code=0;;err_code++)
     {
 	SEGGER_RTT_printf(0,"\r\n[loop]%d\r\n",err_code);
+	SEGGER_RTT_printf(0,"Press G to get calendar,press S to set calendar:");
+	key = SEGGER_RTT_WaitKey();
+	if(key=='G'||key=='g')
+	{
+		app_calendar_get(&calendar);
+		SEGGER_RTT_printf(0,"\r\n%2d:%2d'%2d\" %2d/%2d/%4d\r\n",calendar.hour,calendar.minute,calendar.second,calendar.month,calendar.date,calendar.year);
+	}
+	else if(key=='S'||key=='s')
+	{
+		SEGGER_RTT_printf(0,"\r\nYear:");
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.year=(key-'0')*1000;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.year+=(key-'0')*100;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.year+=(key-'0')*10;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.year+=key-'0';
+		else
+			continue;
+
+		SEGGER_RTT_printf(0,"\r\nMonth:");
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.month=(key-'0')*10;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.month+=key-'0';
+		else
+			continue;
+
+		SEGGER_RTT_printf(0,"\r\nDate:");
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.date=(key-'0')*10;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.date+=key-'0';
+		else
+			continue;
+
+		SEGGER_RTT_printf(0,"\r\nHour:");
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.hour=(key-'0')*10;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.hour+=key-'0';
+		else
+			continue;
+
+		SEGGER_RTT_printf(0,"\r\nMinute:");
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.minute=(key-'0')*10;
+		else
+			continue;
+		key = SEGGER_RTT_WaitKey();
+		if('0'<=key&&key<='9')
+			calendar.minute+=key-'0';
+		else
+			continue;
+
+		calendar.second = 0;
+
+		app_calendar_set(calendar);
+	}
         power_manage();
     }
 }

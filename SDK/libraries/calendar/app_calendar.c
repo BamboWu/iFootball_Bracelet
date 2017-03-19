@@ -32,7 +32,86 @@ APP_TIMER_DEF(m_calendar_timer_id);                                         /**<
  */
 static void calendar_timer_handler(void * pcontext)
 {
-    SEGGER_RTT_printf(0,"\r\n[calender_timer_handler]1s elapse!\r\n");
+    uint8_t daydayup = 0;
+    //SEGGER_RTT_printf(0,"\r\n[calender_timer_handler]1s elapse!\r\n");
+    if(m_calendar.second < 59)
+	    m_calendar.second++;
+    else
+    {
+	    m_calendar.second = 0;
+	    if(m_calendar.minute < 59)
+		    m_calendar.minute++;
+	    else
+	    {
+		    m_calendar.minute = 0;
+		    if(m_calendar.hour < 23)
+			    m_calendar.hour++;
+		    else
+		    {
+			    m_calendar.hour = 0;
+			    daydayup = 1;
+		    }
+	    }
+    }
+
+    if(daydayup)
+	    switch(m_calendar.month)
+	    {
+		    case Jan:
+		    case Mar:
+	            case May:
+		    case Jul:
+		    case Aug:
+		    case Oct: if(m_calendar.date<31)
+				      m_calendar.date++;
+			      else
+			      {
+				      m_calendar.date=1;
+				      m_calendar.month++;
+			      }
+			      break;
+		    case Dec: if(m_calendar.date<31)
+				      m_calendar.date++;
+			      else
+			      {
+				      m_calendar.date=1;
+				      m_calendar.month=Jan;
+				      m_calendar.year++;
+			      }
+			      break;
+		    case Apr:
+		    case Jun:
+		    case Sep:
+		    case Nov: if(m_calendar.date<30)
+				      m_calendar.date++;
+			      else
+			      {
+				      m_calendar.date=1;
+				      m_calendar.month++;
+			      }
+			      break;
+		    case Feb: if((m_calendar.year%4)==0 && (m_calendar.year%400)!=0)
+			      {
+				      if(m_calendar.date<29)
+					      m_calendar.date++;
+				      else
+				      {
+					      m_calendar.date=1;
+					      m_calendar.month++;
+				      }
+			      }
+			      else
+			      {
+				      if(m_calendar.date<28)
+					      m_calendar.date++;
+				      else
+				      {
+					      m_calendar.date=1;
+					      m_calendar.month++;
+				      }
+			      }
+			      break;
+	    }
 }
 
 /**@brief Function to initialize app calendar.
@@ -68,6 +147,7 @@ void app_calendar_set(app_calendar_t const calendar)
     m_calendar.date   = calendar.date;
     m_calendar.hour   = calendar.hour;
     m_calendar.minute = calendar.minute;
+    m_calendar.second = calendar.second;
     err_code = app_timer_start(m_calendar_timer_id,m_timer_interval,NULL);
     APP_ERROR_CHECK(err_code);
 }
@@ -81,6 +161,7 @@ void app_calendar_get(app_calendar_t * p_calendar)
     p_calendar->date   = m_calendar.date;
     p_calendar->hour   = m_calendar.hour;
     p_calendar->minute = m_calendar.minute;
+    p_calendar->second = m_calendar.second;
 }
 
 /**@brief Function for storing the calendar.
