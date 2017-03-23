@@ -64,6 +64,8 @@ C_SOURCE_FILES += $(abspath ./components/ble/common/ble_srv_common.c)
 C_SOURCE_FILES += $(abspath ./components/ble/device_manager/device_manager_peripheral.c)
 C_SOURCE_FILES += $(abspath ./components/ble/ble_advertising/ble_advertising.c)
 C_SOURCE_FILES += $(abspath ./code/ble_mhrs.c)
+C_SOURCE_FILES += $(abspath ./components/ble/ble_services/ble_cts_c/ble_cts_c.c)
+C_SOURCE_FILES += $(abspath ./components/ble/ble_db_discovery/ble_db_discovery.c)
 # nRF_Drivers #
 C_SOURCE_FILES += $(abspath ./components/drivers_nrf/delay/nrf_delay.c) 
 C_SOURCE_FILES += $(abspath ./components/drivers_nrf/gpiote/nrf_drv_gpiote.c)
@@ -80,6 +82,8 @@ C_SOURCE_FILES += $(abspath ./components/libraries/util/app_error.c)
 C_SOURCE_FILES += $(abspath ./components/libraries/util/nrf_assert.c)
 C_SOURCE_FILES += $(abspath ./components/libraries/uart/retarget.c) 
 C_SOURCE_FILES += $(abspath ./components/libraries/sensorsim/sensorsim.c) 
+C_SOURCE_FILES += $(abspath ./components/libraries/scheduler/app_scheduler.c) 
+C_SOURCE_FILES += $(abspath ./components/libraries/timer/app_timer_appsh.c)
 # nRF_SoftDevice #
 C_SOURCE_FILES += $(abspath ./components/softdevice/common/softdevice_handler/softdevice_handler.c)
 
@@ -113,6 +117,9 @@ INC_PATHS += -I$(abspath ./components/drivers_nrf/twi_master/deprecated)
 INC_PATHS += -I$(abspath ./components/drivers_nrf/twi_master/deprecated/config)
 INC_PATHS += -I$(abspath ./components/device)
 INC_PATHS += -I$(abspath ./components/toolchain/gcc)
+INC_PATHS += -I$(abspath ./components/ble/ble_services/ble_cts_c)
+INC_PATHS += -I$(abspath ./components/libraries/scheduler)
+INC_PATHS += -I$(abspath ./components/ble/ble_db_discovery)
 
 ###
 ### output settings

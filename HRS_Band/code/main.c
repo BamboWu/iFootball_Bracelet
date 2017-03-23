@@ -53,7 +53,10 @@
 #include "nrf_drv_gpiote.h"
 #include "twi_master.h"
 
-
+#include "app_scheduler.h"
+#include "app_timer_appsh.h"
+#include "ble_cts_c.h"
+#include "ble_db_discovery.h"
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's datamhrse cannot be changed for the lifetime of the device*/
 
@@ -63,7 +66,7 @@
 #define APP_ADV_TIMEOUT_IN_SECONDS       180                                        /**< The advertising timeout in units of seconds. */
 
 #define APP_TIMER_PRESCALER              0                                          /**< Value of the RTC1 PRESCALER register. */
-#define APP_TIMER_OP_QUEUE_SIZE          4                                          /**< Size of timer operation queues. */
+#define APP_TIMER_OP_QUEUE_SIZE          6                                          /**< Size of timer operation queues. */
 
 #define HEART_RATE_MEAS_INTERVAL      APP_TIMER_TICKS(25, APP_TIMER_PRESCALER) /**< Battery level measurement interval (ticks). */
 #define MIN_BATTERY_LEVEL                81                                         /**< Minimum simulated battery level. */
@@ -78,6 +81,10 @@
 #define FIRST_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER) /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
 #define NEXT_CONN_PARAMS_UPDATE_DELAY    APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER)/**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT     3                                          /**< Number of attempts before giving up the connection parameter negotiation. */
+
+#define SECURITY_REQUEST_DELAY           APP_TIMER_TICKS(4000,APP_TIMER_PRESCALER)/**< Delay after connection until security request is sent, if necessary (ticks). */
+#define SEC_PARAM_TIMEOUT                30
+    /**< Time-out for pairing request or security request (in seconds). */
 
 #define SEC_PARAM_BOND                   1                                          /**< Perform bonding. */
 #define SEC_PARAM_MITM                   0                                          /**< Man In The Middle protection not required. */
@@ -100,12 +107,15 @@
 
 
 
-
 #define CONTINUOUS_MODE     0x0FU
 
-static dm_application_instance_t        m_app_handle;                               /**< Application identifier allocated by device manager */
+static dm_application_instance_t         m_app_handle;                              /**< Application identifier allocated by device manager */
+static dm_handle_t                       m_peer_handle;                             /**< The pear that is currently connected. */
 
 static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID;   /**< Handle of the current connection. */
+
+static ble_db_discovery_t                m_ble_db_discovery;                        /**< Structure used to identify the DB Discovery module. */
+static ble_cts_c_t                       m_cts;                                     /**< Structure to store the data of the current time service. */
 
 /* YOUR_JOB: Declare all services structure your application is using
 static ble_xx_service_t                     m_xxs;
@@ -119,15 +129,22 @@ static ble_mhrs_t                         m_mhrs;                               
 //static sensorsim_cfg_t                   m_battery_sim_cfg;                         /**< Battery Level sensor simulator configuration. */
 //static sensorsim_state_t                 m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
 // YOUR_JOB: Use UUIDs for service(s) used in your application.
-static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
+static ble_uuid_t m_adv_uuids[] = {{BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE},{BLE_UUID_CURRENT_TIME_SERVICE, BLE_UUID_TYPE_BLE}}; /**< Universally unique service identifiers. */
 /* Indicates if reading operation from accelerometer has ended. */
 static volatile bool m_xfer_done = true;
 /* Indicates if setting mode operation has ended. */
 static volatile bool m_set_mode_done;
 /* TWI instance. */
 static const nrf_drv_twi_t m_twi_em_7028 = NRF_DRV_TWI_INSTANCE(0);
-APP_TIMER_DEF(m_mhrs_timer_id);                                                  /**< Battery timer. */
+APP_TIMER_DEF(m_mhrs_timer_id);                                                 /**< Battery timer. */
                                    
+APP_TIMER_DEF(m_sec_req_timer_id);                                              /**< Security Request timer. */
+
+#define SCHED_MAX_EVENT_DATA_SIZE sizeof(app_timer_event_t)                     /**< Maximum size of scheduler events. Note that scheduler BLE stack events do not contain andy data, ad the events are being pulled from the stack in the event handler. */
+#define SCHED_QUEUE_SIZE          8                                             /**< Maximum number of events in the scheduler queue. */
+
+//static ble_uuid_t m_adv_uuids[] = {};
+
 /**@brief Callback function for asserts in the SoftDevice.
  *
  * @details This function will be called in case of an assert in the SoftDevice.
@@ -144,6 +161,76 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
 
+/**@brief Function for handling the Current Time Service errors.
+ *
+ * @param[in]  nrf_error  Error code containing information about what went wrong.
+ */
+static void current_time_error_handler(uint32_t nrf_error)
+{
+    SEGGER_RTT_printf(0,"[cts err handler]\r\n");
+    SEGGER_RTT_WaitKey();
+    APP_ERROR_HANDLER(nrf_error);
+}
+
+/**@brief Function for handling the security request timer time-out.
+ *
+ * @details This function will be called each time the security request timer expires.
+ *
+ * @param[in] p_context  Pointer used for passing some arbitrary information (context) from the app_start_timer() call to the time-out handler.
+ *
+ */
+static void sec_req_timeout_handler(void * p_context)
+{
+    uint32_t              err_code;
+    dm_security_status_t  status;
+
+    if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
+    {
+	err_code = dm_security_status_req(&m_peer_handle, &status);
+	if(err_code != NRF_SUCCESS)
+	{
+		SEGGER_RTT_printf(0,"[dm sec sta req]err:%x\r\n",err_code);
+		SEGGER_RTT_WaitKey();
+	}
+	APP_ERROR_CHECK(err_code);
+
+	// If the link is still not secured by the pear, initiate security procedure.
+	if (status == NOT_ENCRYPTED)
+	{
+	    err_code = dm_security_setup_req(&m_peer_handle);
+	    if(err_code != NRF_SUCCESS)
+	    {
+		    SEGGER_RTT_printf(0,"[dm sec setup req]err:%x\r\n",err_code);
+		    SEGGER_RTT_WaitKey();
+	    }
+	    APP_ERROR_CHECK(err_code);
+	}
+    }
+}
+
+/**@brief Function for printing current time.
+ *
+ * @param[in] p_evt  Event received from the Current Time Service client.
+ *
+ */
+static void current_time_print(ble_cts_c_evt_t * p_evt)
+{
+    SEGGER_RTT_printf(0,"\r\n[current_time_print]:\r\n");
+    SEGGER_RTT_printf(0,"%2d:%2d'%2d\"%3d %d/%d/%4d Weekday:%d\r\n",
+		        p_evt->params.current_time.exact_time_256.day_date_time.date_time.hours,
+		        p_evt->params.current_time.exact_time_256.day_date_time.date_time.minutes,
+		        p_evt->params.current_time.exact_time_256.day_date_time.date_time.seconds,
+		        p_evt->params.current_time.exact_time_256.fractions256,
+		        p_evt->params.current_time.exact_time_256.day_date_time.date_time.month,
+		        p_evt->params.current_time.exact_time_256.day_date_time.date_time.day,
+		        p_evt->params.current_time.exact_time_256.day_date_time.date_time.year,
+		        p_evt->params.current_time.exact_time_256.day_date_time.day_of_week);
+    SEGGER_RTT_printf(0,"Adjust reason:Daylight savings %x, Time zone %x, External update %x, Manual updata %x\r\n",
+		        p_evt->params.current_time.adjust_reason.change_of_daylight_savings_time,
+			p_evt->params.current_time.adjust_reason.change_of_time_zone,
+			p_evt->params.current_time.adjust_reason.external_reference_time_update,
+			p_evt->params.current_time.adjust_reason.manual_time_update);
+}
 
 /**@brief Function for performing battery measurement and updating the Battery Level characteristic
  *        in Battery Service.
@@ -212,10 +299,16 @@ static void timers_init(void)
     err_code = app_timer_create(&m_app_timer_id, APP_TIMER_MODE_REPEATED, timer_timeout_handler);
     APP_ERROR_CHECK(err_code); */
 	
-	err_code = app_timer_create(&m_mhrs_timer_id,
+    err_code = app_timer_create(&m_mhrs_timer_id,
                                 APP_TIMER_MODE_REPEATED,
                                 heart_rate_meas_timeout_handler);
     APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_sec_req_timer_id,
+		                APP_TIMER_MODE_SINGLE_SHOT,
+			       	sec_req_timeout_handler);
+    APP_ERROR_CHECK(err_code); 
+
 }
 
 
@@ -278,6 +371,39 @@ static void on_yys_evt(ble_yy_service_t     * p_yy_service,
     }
 }*/
 
+/**@brief Function for handling the Current Time Service client events.
+ *
+ * @details This function will be called for all events in the Current Time Service client that are passed to the application.
+ *
+ * @param[in] p_evt Event received from the Current Time Service client.
+ *
+ */
+static void on_cts_c_evt(ble_cts_c_t * p_cts, ble_cts_c_evt_t * p_evt)
+{
+    switch (p_evt->evt_type)
+    {
+	case BLE_CTS_C_EVT_DISCOVERY_COMPLETE:
+	    SEGGER_RTT_printf(0,"\r\nCurrent Time Service discoverd on server.\r\n");
+	    break;
+	case BLE_CTS_C_EVT_SERVICE_NOT_FOUND:
+	    SEGGER_RTT_printf(0,"\r\nCurrent Time Service not found on server.\r\n");
+	    break;
+	case BLE_CTS_C_EVT_DISCONN_COMPLETE:
+	    SEGGER_RTT_printf(0,"\r\nDisconnect Complete.\r\n");
+	    break;
+	case BLE_CTS_C_EVT_CURRENT_TIME:
+	    SEGGER_RTT_printf(0,"\r\nCurrent Time received.\r\n");
+	    current_time_print(p_evt);
+	    break;
+	case BLE_CTS_C_EVT_INVALID_TIME:
+	    SEGGER_RTT_printf(0,"\r\nInvalid Time received.\r\n");
+	    break;
+
+	default:
+	    break;
+    }
+}
+
 /**@brief Function for initializing services that will be used by the application.
  */
 static void services_init(void)
@@ -285,6 +411,7 @@ static void services_init(void)
 		
 	uint32_t       err_code;
     ble_mhrs_init_t mhrs_init;
+    ble_cts_c_init_t cts_init_obj;
 		
 	// Initialize Battery Service.
     memset(&mhrs_init, 0, sizeof(mhrs_init));
@@ -302,6 +429,11 @@ static void services_init(void)
     mhrs_init.initial_batt_level   = 0;
 
     err_code = ble_mhrs_init(&m_mhrs, &mhrs_init);
+    APP_ERROR_CHECK(err_code);
+
+    cts_init_obj.evt_handler   = on_cts_c_evt;
+    cts_init_obj.error_handler = current_time_error_handler;
+    err_code                   = ble_cts_c_init(&m_cts, &cts_init_obj);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -468,6 +600,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
     dm_ble_evt_handler(p_ble_evt);
+    ble_db_discovery_on_ble_evt(&m_ble_db_discovery, p_ble_evt);
     ble_conn_params_on_ble_evt(p_ble_evt);
     bsp_btn_ble_on_ble_evt(p_ble_evt);
     on_ble_evt(p_ble_evt);
@@ -476,7 +609,8 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     ble_xxs_on_ble_evt(&m_xxs, p_ble_evt);
     ble_yys_on_ble_evt(&m_yys, p_ble_evt);
     */
-	ble_mhrs_on_ble_evt(&m_mhrs, p_ble_evt);
+    ble_mhrs_on_ble_evt(&m_mhrs, p_ble_evt);
+    ble_cts_c_on_ble_evt(&m_cts, p_ble_evt);
 }
 
 
@@ -510,7 +644,9 @@ static void ble_stack_init(void)
     ble_enable_params_t ble_enable_params;
     memset(&ble_enable_params, 0, sizeof(ble_enable_params));
 #if (defined(S130) || defined(S132))
-    ble_enable_params.gatts_enable_params.attr_tab_size   = BLE_GATTS_ATTR_TAB_SIZE_DEFAULT;
+    ble_enable_params.gatts_enable_params.attr_tab_size   = BLE_GATTS_ATTR_TAB_SIZE_MIN;
+#else
+    ble_enable_params.gatts_enable_params.attr_tab_size   = 0X500;
 #endif
     ble_enable_params.gatts_enable_params.service_changed = IS_SRVC_CHANGED_CHARACT_PRESENT;
     err_code = sd_ble_enable(&ble_enable_params);
@@ -526,6 +662,12 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+/**@brief Function for the Event Schedular initialization.
+ */
+static void scheduler_init(void)
+{
+    APP_SCHED_INIT(SCHED_MAX_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
+}
 
 /**@brief Function for handling the Device Manager events.
  *
@@ -535,8 +677,26 @@ static uint32_t device_manager_evt_handler(dm_handle_t const * p_handle,
                                            dm_event_t const  * p_event,
                                            ret_code_t        event_result)
 {
+    uint32_t  err_code;
     APP_ERROR_CHECK(event_result);
 
+    switch (p_event->event_id)
+    {
+	case DM_EVT_CONNECTION:
+	    m_peer_handle = (*p_handle);
+	    err_code      = app_timer_start(m_sec_req_timer_id, SECURITY_REQUEST_DELAY,NULL);
+	    APP_ERROR_CHECK(err_code);
+	    break;
+	case DM_EVT_LINK_SECURED:
+	    err_code = ble_db_discovery_start(&m_ble_db_discovery,
+			                      p_event->event_param.p_gap_param->conn_handle);
+	    APP_ERROR_CHECK(err_code);
+	    break;
+
+	default:
+	    // No implementation needed.
+	    break;
+    }
 #ifdef BLE_DFU_APP_SUPPORT
     if (p_event->event_id == DM_EVT_LINK_SECURED)
     {
@@ -575,7 +735,7 @@ static void device_manager_init(bool erase_bonds)
     register_param.sec_param.min_key_size = SEC_PARAM_MIN_KEY_SIZE;
     register_param.sec_param.max_key_size = SEC_PARAM_MAX_KEY_SIZE;
     register_param.evt_handler            = device_manager_evt_handler;
-    register_param.service_type           = DM_PROTOCOL_CNTXT_GATT_SRVR_ID;
+    register_param.service_type           = DM_PROTOCOL_CNTXT_ALL;
 
     err_code = dm_register(&m_app_handle, &register_param);
     APP_ERROR_CHECK(err_code);
@@ -594,7 +754,7 @@ static void advertising_init(void)
 
     advdata.name_type               = BLE_ADVDATA_FULL_NAME;
     advdata.include_appearance      = true;
-    advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
+    advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_LIMITED_DISC_MODE;
     advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
     advdata.uuids_complete.p_uuids  = m_adv_uuids;
 
@@ -607,6 +767,15 @@ static void advertising_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+/**
+ * @brief Database discovery collector initialization.
+ */
+static void db_discovery_init(void)
+{
+    uint32_t err_code = ble_db_discovery_init();
+
+    APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Function for handling events from the BSP module.
  *
@@ -830,6 +999,8 @@ int main(void)
     uint32_t err_code;
 	//double test = 0.1234567891;
     bool erase_bonds;
+    uint8_t  loop_id,key;
+
     // Initialize.
 	SEGGER_RTT_Init();
 	//SEGGER_RTT_printf(0,"%lf\n", test);
@@ -837,6 +1008,8 @@ int main(void)
     buttons_leds_init(&erase_bonds);
     ble_stack_init();
     device_manager_init(erase_bonds);
+    db_discovery_init();
+    scheduler_init();
     gap_params_init();
     advertising_init();
     services_init();
@@ -852,9 +1025,19 @@ int main(void)
     APP_ERROR_CHECK(err_code);
 
     // Enter main loop.
-    for (;;)
+    for (loop_id=0;;loop_id++)
     {
+	app_sched_execute();
         power_manage();
+	SEGGER_RTT_printf(0,"\r\n[loop%d]Press R to read time\r\n",loop_id);
+	key = SEGGER_RTT_WaitKey();
+	if(key == 'r' || key == 'R')
+	{
+		err_code = ble_cts_c_current_time_read(&m_cts);
+		if(err_code == NRF_ERROR_NOT_FOUND)
+			SEGGER_RTT_printf(0,"\r\n[current_time_read]CTS is not discovered.\r\n");
+	}
+
     }
 }
 
