@@ -6,4 +6,9 @@
 !**/_build/*.bin
 !**/_build/*.out
 **/armgcc/.*
+**/.cproject
+**/.project
+**/.settings
+**/Objects/*
+**/Listings/*
 
